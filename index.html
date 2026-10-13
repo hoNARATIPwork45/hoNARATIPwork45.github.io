@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PicDrop</title>
+<meta name="description" content="ส่งรูปจากมือถือไปคอมผ่านเว็บ ไม่ต้องลงแอป">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📸</text></svg>">
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--text:#1d2230;--muted:#6b7280;--accent:#4f46e5;--accent2:#eef2ff;--ok:#16a34a;--err:#dc2626;--border:#e5e7eb}
+  @media (prefers-color-scheme: dark){:root{--bg:#0f1117;--card:#181b24;--text:#e7e9ee;--muted:#9aa0ad;--accent:#818cf8;--accent2:#232745;--border:#2a2e3a}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans Thai",sans-serif;line-height:1.5}
+  .wrap{max-width:860px;margin:0 auto;padding:24px 16px 60px}
+  h1{margin:0 0 4px;font-size:28px}
+  .sub{color:var(--muted);margin:0 0 20px}
+  .tabs{display:flex;gap:8px;margin-bottom:16px}
+  .tabs button{flex:1;padding:14px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:17px;cursor:pointer}
+  .tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+  .hidden{display:none!important}
+  .code{font-size:56px;font-weight:800;letter-spacing:12px;text-align:center;color:var(--accent);margin:8px 0}
+  .center{text-align:center}
+  #qr{display:inline-block;padding:10px;background:#fff;border-radius:10px;margin:8px 0}
+  .status{padding:10px 14px;border-radius:10px;background:var(--accent2);margin:12px 0;font-size:15px}
+  .status.ok{color:var(--ok)} .status.err{color:var(--err)}
+  input[type=text]{width:100%;font-size:36px;text-align:center;letter-spacing:10px;padding:12px;border-radius:12px;border:2px solid var(--border);background:var(--bg);color:var(--text)}
+  .btn{display:block;width:100%;padding:16px;margin-top:12px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:18px;cursor:pointer}
+  .btn.sec{background:var(--accent2);color:var(--accent)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:14px}
+  .item{position:relative;border-radius:10px;overflow:hidden;background:var(--bg);border:1px solid var(--border);aspect-ratio:1}
+  .item img,.item video{width:100%;height:100%;object-fit:cover;display:block}
+  .item .file{display:flex;align-items:center;justify-content:center;height:100%;padding:8px;font-size:12px;word-break:break-all;text-align:center}
+  .item a{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.65);color:#fff;text-decoration:none;font-size:13px;padding:4px 8px;border-radius:8px}
+  .bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:6px}
+  .bar>div{height:100%;width:0;background:var(--accent);transition:width .15s}
+  .muted{color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📸 PicDrop</h1>
+  <p class="sub">ส่งรูปจากมือถือไปคอม ไม่ต้องลงแอป ไม่ต้องล็อกอิน (ส่งตรงเครื่องถึงเครื่อง)</p>
+
+  <div class="tabs">
+    <button id="tabRecv">💻 รับ (คอม)</button>
+    <button id="tabSend">📱 ส่ง (มือถือ)</button>
+  </div>
+
+  <!-- RECEIVE -->
+  <div id="recv" class="card hidden">
+    <div class="center">
+      <div class="muted">เปิดเว็บนี้ในมือถือ แล้วสแกน QR หรือกรอกรหัส</div>
+      <div class="code" id="myCode">----</div>
+      <div id="qr"></div>
+    </div>
+    <div class="status" id="recvStatus">กำลังเตรียม...</div>
+    <div class="bar"><div id="recvBar"></div></div>
+    <button class="btn hidden" id="zipBtn">⬇️ ดาวน์โหลดทั้งหมด (.zip)</button>
+    <div class="grid" id="gallery"></div>
+  </div>
+
+  <!-- SEND -->
+  <div id="send" class="card hidden">
+    <div id="joinBox">
+      <div class="muted center">กรอกรหัส 4 หลักที่ขึ้นบนจอคอม</div>
+      <input type="text" id="codeIn" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+      <button class="btn" id="joinBtn">เชื่อมต่อ</button>
+    </div>
+    <div id="pickBox" class="hidden">
+      <input type="file" id="files" accept="image/*,video/*" multiple class="hidden">
+      <button class="btn" id="pickBtn">🖼️ เลือกรูปที่จะส่ง</button>
+      <button class="btn sec" id="camBtn">📷 ถ่ายรูปแล้วส่ง</button>
+      <input type="file" id="cam" accept="image/*" capture="environment" class="hidden">
+    </div>
+    <div class="status" id="sendStatus">ยังไม่ได้เชื่อมต่อ</div>
+    <div class="bar"><div id="sendBar"></div></div>
+  </div>
+
+  <p class="muted center" style="margin-top:24px">ไฟล์ส่งตรงระหว่างเครื่องผ่าน WebRTC ไม่ถูกเก็บบนเซิร์ฟเวอร์ใด ๆ</p>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+const PREFIX = 'picdrop-nrt-v1-';
+const CHUNK = 64 * 1024;
+const $ = id => document.getElementById(id);
+const fmt = b => b > 1048576 ? (b/1048576).toFixed(1)+' MB' : Math.ceil(b/1024)+' KB';
+const setStatus = (el, msg, cls='') => { el.textContent = msg; el.className = 'status ' + cls; };
+
+// ---------- mode switching ----------
+const params = new URLSearchParams(location.search);
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+let started = { recv:false, send:false };
+function show(mode){
+  $('tabRecv').classList.toggle('on', mode==='recv');
+  $('tabSend').classList.toggle('on', mode==='send');
+  $('recv').classList.toggle('hidden', mode!=='recv');
+  $('send').classList.toggle('hidden', mode!=='send');
+  if (mode==='recv' && !started.recv){ started.recv = true; startReceiver(); }
+}
+$('tabRecv').onclick = () => show('recv');
+$('tabSend').onclick = () => show('send');
+
+// ---------- RECEIVER (computer) ----------
+const received = [];
+function startReceiver(){
+  const code = String(Math.floor(1000 + Math.random()*9000));
+  const peer = new Peer(PREFIX + code);
+  peer.on('open', () => {
+    $('myCode').textContent = code;
+    const link = location.origin + location.pathname + '?c=' + code;
+    $('qr').innerHTML = '';
+    new QRCode($('qr'), { text: link, width: 180, height: 180 });
+    setStatus($('recvStatus'), 'พร้อมรับ — รอมือถือเชื่อมต่อ...');
+  });
+  peer.on('error', err => {
+    if (err.type === 'unavailable-id') { peer.destroy(); startReceiver(); return; } // code taken, pick another
+    setStatus($('recvStatus'), 'เกิดข้อผิดพลาด: ' + err.type + ' (ลองรีเฟรชหน้า)', 'err');
+  });
+  peer.on('disconnected', () => peer.reconnect());
+  peer.on('connection', conn => {
+    let cur = null;
+    conn.on('open', () => setStatus($('recvStatus'), '✅ มือถือเชื่อมต่อแล้ว — รอรับรูป...', 'ok'));
+    conn.on('data', data => {
+      if (typeof data !== 'string') {
+        if (!cur) return;
+        cur.parts.push(data); cur.got += data.byteLength;
+        $('recvBar').style.width = (cur.got / cur.size * 100) + '%';
+        return;
+      }
+      const msg = JSON.parse(data);
+      if (msg.t === 'start') {
+        cur = { name: msg.name, type: msg.type, size: msg.size, parts: [], got: 0 };
+        setStatus($('recvStatus'), `กำลังรับ ${msg.name} (${msg.idx}/${msg.total})`);
+      } else if (msg.t === 'end' && cur) {
+        addToGallery(new Blob(cur.parts, { type: cur.type }), cur.name);
+        cur = null;
+        setStatus($('recvStatus'), `✅ ได้รับแล้ว ${received.length} ไฟล์`, 'ok');
+      }
+    });
+    conn.on('close', () => setStatus($('recvStatus'), `มือถือตัดการเชื่อมต่อ (ได้รับทั้งหมด ${received.length} ไฟล์) — เชื่อมใหม่ได้ด้วยรหัสเดิม`));
+  });
+}
+function addToGallery(blob, name){
+  received.push({ blob, name });
+  const url = URL.createObjectURL(blob);
+  const div = document.createElement('div'); div.className = 'item';
+  if (blob.type.startsWith('image/')) { const img = new Image(); img.src = url; div.appendChild(img); }
+  else if (blob.type.startsWith('video/')) { const v = document.createElement('video'); v.src = url; v.muted = true; div.appendChild(v); }
+  else { const s = document.createElement('div'); s.className = 'file'; s.textContent = name; div.appendChild(s); }
+  const a = document.createElement('a'); a.href = url; a.download = name; a.textContent = '⬇️ โหลด';
+  div.appendChild(a);
+  $('gallery').prepend(div);
+  $('zipBtn').classList.remove('hidden');
+}
+$('zipBtn').onclick = async () => {
+  $('zipBtn').disabled = true; $('zipBtn').textContent = 'กำลังรวมไฟล์...';
+  const zip = new JSZip(); const used = {};
+  for (const r of received) {
+    let n = r.name; if (used[n]) n = n.replace(/(\.[^.]*)?$/, `-${used[r.name]}$1`); used[r.name] = (used[r.name]||0)+1;
+    zip.file(n, r.blob);
+  }
+  const out = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(out);
+  a.download = 'picdrop-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.zip'; a.click();
+  $('zipBtn').disabled = false; $('zipBtn').textContent = '⬇️ ดาวน์โหลดทั้งหมด (.zip)';
+};
+
+// ---------- SENDER (phone) ----------
+let conn = null, sendPeer = null;
+function connect(code){
+  if (!/^\d{4}$/.test(code)) { setStatus($('sendStatus'), 'กรอกรหัสให้ครบ 4 หลัก', 'err'); return; }
+  setStatus($('sendStatus'), 'กำลังเชื่อมต่อ...');
+  if (sendPeer) sendPeer.destroy();
+  sendPeer = new Peer();
+  sendPeer.on('open', () => {
+    conn = sendPeer.connect(PREFIX + code, { reliable: true, serialization: 'raw' });
+    conn.on('open', () => {
+      setStatus($('sendStatus'), '✅ เชื่อมต่อกับคอมแล้ว (รหัส ' + code + ') — เลือกรูปได้เลย', 'ok');
+      $('joinBox').classList.add('hidden'); $('pickBox').classList.remove('hidden');
+    });
+    conn.on('close', () => {
+      setStatus($('sendStatus'), 'การเชื่อมต่อหลุด — กรอกรหัสใหม่', 'err');
+      $('joinBox').classList.remove('hidden'); $('pickBox').classList.add('hidden');
+    });
+  });
+  sendPeer.on('error', err => {
+    const msg = err.type === 'peer-unavailable' ? 'ไม่พบรหัสนี้ — เช็กรหัสบนจอคอมอีกครั้ง' : 'เกิดข้อผิดพลาด: ' + err.type;
+    setStatus($('sendStatus'), msg, 'err');
+  });
+}
+$('joinBtn').onclick = () => connect($('codeIn').value.trim());
+$('codeIn').addEventListener('input', e => { if (e.target.value.length === 4) connect(e.target.value); });
+$('pickBtn').onclick = () => $('files').click();
+$('camBtn').onclick = () => $('cam').click();
+$('files').onchange = e => sendFiles([...e.target.files]).then(() => e.target.value = '');
+$('cam').onchange = e => sendFiles([...e.target.files]).then(() => e.target.value = '');
+
+const waitDrain = () => new Promise(res => {
+  const dc = conn.dataChannel;
+  if (!dc || dc.bufferedAmount < 1024*1024) return res();
+  dc.bufferedAmountLowThreshold = 256*1024;
+  const done = () => { dc.removeEventListener('bufferedamountlow', done); res(); };
+  dc.addEventListener('bufferedamountlow', done);
+});
+async function sendFiles(files){
+  if (!conn || !conn.open || !files.length) return;
+  $('pickBtn').disabled = $('camBtn').disabled = true;
+  const total = files.reduce((s,f) => s + f.size, 0); let sent = 0;
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    setStatus($('sendStatus'), `กำลังส่ง ${i+1}/${files.length}: ${f.name} (${fmt(f.size)})`);
+    conn.send(JSON.stringify({ t:'start', name: f.name || ('photo-' + Date.now() + '.jpg'), type: f.type, size: f.size, idx: i+1, total: files.length }));
+    const buf = await f.arrayBuffer();
+    for (let o = 0; o < buf.byteLength; o += CHUNK) {
+      await waitDrain();
+      if (!conn.open) { setStatus($('sendStatus'), 'การเชื่อมต่อหลุดระหว่างส่ง', 'err'); return; }
+      const d = buf.slice(o, o + CHUNK);
+      conn.send(d);
+      sent += d.byteLength; $('sendBar').style.width = (sent / total * 100) + '%';
+    }
+    conn.send(JSON.stringify({ t:'end' }));
+  }
+  setStatus($('sendStatus'), `✅ ส่งครบ ${files.length} ไฟล์ (${fmt(total)}) — ส่งเพิ่มได้`, 'ok');
+  $('pickBtn').disabled = $('camBtn').disabled = false;
+}
+
+// ---------- init ----------
+if (params.get('c')) { show('send'); $('codeIn').value = params.get('c'); connect(params.get('c')); }
+else show(isMobile ? 'send' : 'recv');
+</script>
+</body>
+</html>
