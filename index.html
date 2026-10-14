@@ -145,6 +145,12 @@ function startReceiver(){
   });
   peer.on('error', err => {
     if (err.type === 'unavailable-id') { peer.destroy(); startReceiver(); return; } // code taken, pick another
+    if (err.type === 'peer-unavailable') return; // a sender that gave up / reconnected — harmless
+    if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
+      setStatus($('recvStatus'), 'เน็ตสะดุด — กำลังเชื่อมใหม่...', 'err');
+      setTimeout(() => { if (peer.disconnected && !peer.destroyed) peer.reconnect(); }, 2000);
+      return;
+    }
     setStatus($('recvStatus'), 'เกิดข้อผิดพลาด: ' + err.type + ' (ลองรีเฟรชหน้า)', 'err');
   });
   peer.on('disconnected', () => peer.reconnect());
@@ -211,11 +217,18 @@ $('zipBtn').onclick = async () => {
 };
 
 // ---------- SENDER (phone) ----------
-let conn = null, sendPeer = null;
+let conn = null, sendPeer = null, sendCode = null, connectTimer = null;
 function connect(code){
   if (!/^\d{4}$/.test(code)) { setStatus($('sendStatus'), 'กรอกรหัสให้ครบ 4 หลัก', 'err'); return; }
+  if (code === sendCode && sendPeer && !sendPeer.destroyed) return; // already connecting/connected to this code
+  if (started.recv && code === $('myCode').textContent) { setStatus($('sendStatus'), 'นี่คือรหัสของเครื่องนี้เอง — ให้ใส่รหัสที่ขึ้นบนเครื่องที่จะรับ', 'err'); return; }
   setStatus($('sendStatus'), 'กำลังเชื่อมต่อ...');
   if (sendPeer) sendPeer.destroy();
+  sendCode = code;
+  clearTimeout(connectTimer);
+  connectTimer = setTimeout(() => {
+    if (!(conn && conn.open)) setStatus($('sendStatus'), 'ยังเชื่อมต่อไม่ได้ — เช็กรหัส แล้วลองรีเฟรชหน้าทั้ง 2 เครื่อง (ถ้ายังไม่ได้ ให้ต่อ Wi-Fi เดียวกัน)', 'err');
+  }, 15000);
   sendPeer = new Peer();
   sendPeer.on('open', () => {
     conn = sendPeer.connect(PREFIX + code, { reliable: true, serialization: 'raw' });
@@ -227,13 +240,16 @@ function connect(code){
       $('joinBox').classList.add('hidden'); $('pickBox').classList.remove('hidden');
     });
     conn.on('close', () => {
+      sendCode = null;
       setStatus($('sendStatus'), 'การเชื่อมต่อหลุด — กรอกรหัสใหม่', 'err');
       $('joinBox').classList.remove('hidden'); $('pickBox').classList.add('hidden');
     });
   });
   sendPeer.on('error', err => {
-    const msg = err.type === 'peer-unavailable' ? 'ไม่พบรหัสนี้ — เช็กรหัสบนเครื่องรับอีกครั้ง' : 'เกิดข้อผิดพลาด: ' + err.type;
+    const msg = err.type === 'peer-unavailable' ? 'ไม่พบรหัส ' + code + ' — เช็กรหัสบนเครื่องรับอีกครั้ง (รหัสเปลี่ยนทุกครั้งที่รีเฟรช)' : 'เกิดข้อผิดพลาด: ' + err.type + ' — ลองอีกครั้ง';
     setStatus($('sendStatus'), msg, 'err');
+    clearTimeout(connectTimer);
+    sendCode = null; sendPeer.destroy();
   });
 }
 $('joinBtn').onclick = () => connect($('codeIn').value.trim());
